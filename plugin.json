@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "Agent Skills interpreter for Grinning Cat. Implements the open Agent Skills standard (agentskills.io), allowing any SKILL.md-based plugin to extend the Cat's capabilities with progressive disclosure.",
   "author": "Matteo Cacciola",
-  "tags": ["skills", "agent-skills", "SKILL.md", "extensibility"],
+  "tags": "skills, agent-skills, SKILL.md, extensibility",
   "dependencies": []
 }
