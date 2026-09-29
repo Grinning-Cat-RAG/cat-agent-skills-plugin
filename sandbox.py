@@ -20,6 +20,7 @@ See the "How to Use" section at the bottom of the file.
 """
 import shutil
 import subprocess
+import uuid
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -222,11 +223,16 @@ def run_docker(
 
     # --- Build the Docker command -------------------------------------------
 
+    # a name of its own: on a timeout only this container is stopped, never the ones of the other scripts (of other
+    # agents too) running on the machine
+    container_name = f"agent-skills-{uuid.uuid4().hex}"
+
     cmd: list[str] = [
         "docker", "run",
 
         # Disposable container: automatically removed upon exit
         "--rm",
+        f"--name={container_name}",
 
         # No interactive TTY / stdin
         "--interactive=false",
@@ -288,9 +294,8 @@ def run_docker(
             # No special env: Docker does not inherit the host env by default
         )
     except subprocess.TimeoutExpired:
-        # Docker doesn't automatically kill the container when the subprocess times out:
-        # we do that by searching for the container by label.
-        _kill_orphan_containers()
+        # Docker doesn't automatically kill the container when the subprocess times out: we kill it, by its name.
+        _kill_container(container_name)
         return SandboxResult(
             returncode=-1,
             stdout="",
@@ -359,28 +364,16 @@ def _shell_quote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
-def _kill_orphan_containers() -> None:
+def _kill_container(name: str) -> None:
     """
-    Terminate all containers that were started with our sandbox label and are still running.
-    Called only after a TimeoutExpired to ensure no orphaned containers linger on the host.
+    Terminate the container of a script that timed out, and only that one: the containers of the other scripts running
+    on the machine (of other agents too) go on.
     """
     try:
-        # List container IDs with our label
-        ps_result = subprocess.run(
-            ["docker", "ps", "-q", "--filter", f"label={_SANDBOX_LABEL}"],
-            capture_output=True, timeout=5,
-        )
-        container_ids = ps_result.stdout.decode().split()
-        if not container_ids:
-            return
-        # Force-stop all of them in a single docker kill call
-        subprocess.run(
-            ["docker", "kill"] + container_ids,
-            capture_output=True, timeout=10,
-        )
-        log.debug(f"sandbox: killed {len(container_ids)} orphan container(s): {container_ids}")
+        subprocess.run(["docker", "kill", name], capture_output=True, timeout=10)
+        log.debug(f"sandbox: killed the container {name}")
     except Exception as exc:
-        log.warning(f"sandbox: could not kill orphan containers – {exc}")
+        log.warning(f"sandbox: could not kill the container {name} – {exc}")
 
 
 def _filter_docker_noise(stderr: str) -> str:

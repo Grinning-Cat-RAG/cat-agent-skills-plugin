@@ -445,7 +445,9 @@ async def run_skill_script_tool(tool_input: str, cat: StrayCat) -> str:
 
     # --- Execute within the sandbox ----------------------------------------------
     try:
-        result = run_skill_script(
+        # in a worker thread: the sandbox waits for the script (up to its timeout), the event loop serves the others
+        result = await asyncio.to_thread(
+            run_skill_script,
             script_path,
             script_args,
             mode=mode,
